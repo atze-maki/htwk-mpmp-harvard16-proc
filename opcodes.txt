@@ -18,9 +18,9 @@ IMOPb[7],IMOPa[11],CMD1[6],CMD0[15..12], Reg_Result, Reg_Op1, Reg_Op0
 
 Befehlsliste 
 
-ADD R1, R2, R3 ; R1 = R2+R3; 0x10
-SUB R1, R2, R3 ; R1 = R2-R3; 0x11
-MUL                        ; 0x12 
+ADD R1, R2, R3 ; R1 = R2+R3; 0x00
+SUB R1, R2, R3 ; R1 = R2-R3; 0x01
+MUL                        ; 0x02 
 DIV
 SHL
 SHR
