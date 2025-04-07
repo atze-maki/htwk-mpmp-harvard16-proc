@@ -3,10 +3,10 @@ Zu Implementieren als Mindestanforderung
 
 
 Befehl mit 8 Bit Konstante
-CMD0[15..12],0,Reg[10..8]const[7..0]
+CMD0[15..12],1,Reg[10..8]const[7..0]
 
 Befehl mit 3 Registern
-CMD0[15..12],1,Reg_Result[10..8],IMOPb[7],CMD1[6],Reg_Op1[5..3],Reg_Op0[2..0] 
+CMD0[15..12],0,Reg_Result[10..8],IMOPb[7],CMD1[6],Reg_Op1[5..3],Reg_Op0[2..0] 
 
 
 
