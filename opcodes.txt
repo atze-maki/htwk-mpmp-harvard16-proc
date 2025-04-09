@@ -20,9 +20,9 @@ Befehlsliste
 
 ADD R1, R2, R3 ; R1 = R2+R3; 0x00
 SUB R1, R2, R3 ; R1 = R2-R3; 0x01
-MUL                        ; 0x02 
-DIV
-SHL
+MUL ; 0x02 
+DIV ; 0x03
+SHL ; 0x04
 SHR
 NEG
 
