@@ -2154,6 +2154,13 @@
       <a name="label" val="IO_Input"/>
       <a name="output" val="true"/>
     </comp>
+    <comp lib="0" loc="(1020,750)" name="Pin">
+      <a name="appearance" val="classic"/>
+      <a name="facing" val="west"/>
+      <a name="label" val="NO_PC_INC"/>
+      <a name="labelfont" val="SansSerif bold 15"/>
+      <a name="output" val="true"/>
+    </comp>
     <comp lib="0" loc="(1030,350)" name="Pin">
       <a name="appearance" val="classic"/>
       <a name="facing" val="west"/>
