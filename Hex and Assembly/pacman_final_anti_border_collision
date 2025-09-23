@@ -1,0 +1,660 @@
+-- ==========================================================
+-- Projekt:    PAC-MAN (8x8) mit Innen-/Außenkollisionslogik
+-- Plattform:  MPMP25 (Wagner-ISA, Register R2..R7, SP, PC)
+-- Zweck:      Sprite zeichnen, Tastatursteuerung (W/A/S/D),
+--             Map einmalig zeichnen, Border- & Innenkollision
+--             verhindern (Übermal-Schutz).
+-- Konvention:
+--   R2 = X (rechts wachsend), R3 = Y (unten wachsend)
+--   SP = Sprite-Startadresse (Richtungsoffset)
+--   R4/R5/R6/R7 = temporäre Register (ALU/Loop/Checks)
+--   IO:
+--     0: IO_SCREEN_X, 1: IO_SCREEN_Y, 2: IO_SCREEN_WRITE
+--     3: IO_SCREEN_RST, 4: IO_KB_CLEAR, 5: IO_JOY (optional)
+--     6..8: R,G,B (8-bit)
+--   Sprites:
+--     PAC_RIGHT=0x10, PAC_UP=0x18, PAC_LEFT=0x20, PAC_DOWN=0x28
+--     PAC_CLOSED=0x30 (ein Frame zur 'Kau'-Animation)
+-- Hinweise:
+--   - Page-lokale Branches (JZ/JNZ/JC/JNC PC ...) nur innerhalb
+--     derselben 256B-Seite; weite Sprünge via JL verwenden.
+--   - Erase/Draw arbeiten exakt 8x8 Pixel (Schrittweite 7).
+--   - Alle Kommentare im Stil: '-- Kommentar'.
+-- ==========================================================
+
+-- ----------------------------------------------------------
+-- Konstanten: Sprites, Grenzen (Außenrahmen) und Innenwände
+-- ----------------------------------------------------------
+
+CONST PAC_RIGHT  0x10
+CONST PAC_UP     0x18
+CONST PAC_LEFT   0x20
+CONST PAC_DOWN   0x28
+CONST PAC_CLOSED 0x30      
+
+-- Border Collision
+CONST X_LO 49
+CONST X_HI 215
+CONST Y_LO 42
+CONST Y_HI 192
+
+-- Innenwände als Rechtecke (inklusive, 2px dick)
+-- Vertikal links  : x=60..61,  y=60..179
+CONST VWL_X0 60
+CONST VWL_X1 61
+CONST VWL_Y0 60
+CONST VWL_Y1 179
+-- Vertikal rechts : x=196..197, y=60..179
+CONST VWR_X0 196
+CONST VWR_X1 197
+CONST VWR_Y0 60
+CONST VWR_Y1 179
+-- Vertikal Mitte oben  : x=128..129, y=60..110
+CONST VMU_X0 128
+CONST VMU_X1 129
+CONST VMU_Y0 60
+CONST VMU_Y1 110
+-- Vertikal Mitte unten : x=128..129, y=150..180
+CONST VMD_X0 128
+CONST VMD_X1 129
+CONST VMD_Y0 150
+CONST VMD_Y1 180
+
+-- Horizontal oben   : y=60..61,  x=60..196
+CONST H1_Y0 60
+CONST H1_Y1 61
+CONST H1_X0 60
+CONST H1_X1 196
+-- Horizontal Mitte  : y=120..121, x=104..152
+CONST H2_Y0 120
+CONST H2_Y1 121
+CONST H2_X0 104
+CONST H2_X1 152
+-- Horizontal unten  : y=180..181, x=60..196
+CONST H3_Y0 180
+CONST H3_Y1 181
+CONST H3_X0 60
+CONST H3_X1 196
+
+
+CONST COL_BLACK  0x00
+
+CONST POS_CNTR   0x90
+
+-- ----------------------------------------------------------
+-- Initialisierung: Startposition, Richtung, Bildschirm löschen
+-- ----------------------------------------------------------
+
+LI R2 POS_CNTR           -- X-Start (mitte)
+LI R3 0x90               -- Y-Start (mittig)
+LI R7 PAC_UP             -- Start-Richtung: oben
+MOV SP R7                -- SP := Spritebasis (Richtung)
+
+LI R6 0                  -- Farbe initial schwarz
+OUT R6 IO_SCREEN_R       -- R=0
+OUT R6 IO_SCREEN_G       -- G=0
+OUT R6 IO_SCREEN_B       -- B=0
+OUT R6 IO_SCREEN_RST     -- Bildschirm einmal löschen
+JL MAP_DRAW_LITE         -- Map zeichnen, dann zurück zum Draw
+
+-- ----------------------------------------------------------
+-- DRAW: zeichne Sprite (einmal, Mund offen) an (R2,R3)
+--  - Liest 8 Sprite-Zeilen ab SP, je 8 Bits pro Zeile
+--  - Jeder gesetzte Bit → Pixel bei IO_SCREEN_WRITE
+-- ----------------------------------------------------------
+
+DRAW_PAC:
+    -- Pac-Man Gelb (R=255, G=255, B=0)
+    LI R6 255
+    OUT R6 IO_SCREEN_R
+    OUT R6 IO_SCREEN_G
+    LI R6 0
+    OUT R6 IO_SCREEN_B
+    LI R4 8
+
+LOOP_Y:
+        INR R5 R7          -- R5 := Spritezeile (8 Bits), R7 bleibt
+        LI R6 8            -- 8 Spalten
+LOOP_X:
+            SHRI R5 R5 1            -- nächstes Bit → Carry
+            JNC PC NO_PIXEL         -- kein Pixel
+            OUT R2 IO_SCREEN_X
+            OUT R3 IO_SCREEN_Y
+            OUT R3 IO_SCREEN_WRITE  -- Pixel setzen (Strobe)
+NO_PIXEL:
+            SUBI R2 R2 1   -- X++
+            SUBI R6 R6 1   -- Spaltenzähler--
+            JNZ PC LOOP_X  -- weitere Bits in der Zeile
+
+        ADDI R7 R7 1       -- nächste Spritezeile
+        ADDI R3 R3 1       -- Y++
+        ADDI R2 R2 7       -- X -= 7 (Zeilenanfang rechtsbündig)
+        ADDI R2 R2 1
+        SUBI R4 R4 1       -- Zeilenzähler--
+    JNZ PC LOOP_Y
+    SUBI R3 R3 7           -- Y zurück
+    SUBI R3 R3 1
+
+-- ----------------------------------------------------------
+-- DRAW_BOTH: zeichne 'offen' und einmal 'geschlossen'
+--  - Dient als einfache 'Kau'-Animation pro Schritt
+-- ----------------------------------------------------------
+
+DRAW_BOTH:
+    -- OPEN (wie oben)
+    MOV R7 SP
+
+    -- Gelb (R=255, G=255, B=0)
+    LI R6 255
+    OUT R6 IO_SCREEN_R
+    OUT R6 IO_SCREEN_G
+    LI R6 0
+    OUT R6 IO_SCREEN_B
+
+    LI R4 8
+Y_OPEN:
+        INR R5 R7
+        LI R6 8
+X_OPEN:
+            SHRI R5 R5 1
+            JNC PC NO_PX_OPEN
+            OUT R2 IO_SCREEN_X
+            OUT R3 IO_SCREEN_Y
+            OUT R3 IO_SCREEN_WRITE
+NO_PX_OPEN:
+            SUBI R2 R2 1
+            SUBI R6 R6 1
+            JNZ PC X_OPEN
+
+        ADDI R7 R7 1
+        ADDI R3 R3 1
+        ADDI R2 R2 7
+        ADDI R2 R2 1
+        SUBI R4 R4 1
+    JNZ PC Y_OPEN
+    SUBI R3 R3 7
+    SUBI R3 R3 1
+
+    -- CLOSED (einmal, Kau-Frame))
+    LI R7 PAC_CLOSED
+
+    LI R4 8
+Y_CLOSED:
+        INR R5 R7
+        LI R6 8
+X_CLOSED:
+            SHRI R5 R5 1
+            JNC PC NO_PX_CLOSED
+            OUT R2 IO_SCREEN_X
+            OUT R3 IO_SCREEN_Y
+            OUT R3 IO_SCREEN_WRITE
+NO_PX_CLOSED:
+            SUBI R2 R2 1
+            SUBI R6 R6 1
+            JNZ PC X_CLOSED
+
+        ADDI R7 R7 1
+        ADDI R3 R3 1
+        ADDI R2 R2 7
+        ADDI R2 R2 1
+        SUBI R4 R4 1
+    JNZ PC Y_CLOSED
+    SUBI R3 R3 7
+    SUBI R3 R3 1
+
+    JL WAIT_FOR_INPUT -- zurück in die Eingabeschleife
+
+-- ==========================================================
+-- Einmalige, vereinfachte Pac-Man-Map (blau, 2px dick)
+-- Benutzt R2/R3=XY, R5=Len, R6=Farbe. Am Ende: Gelb + Startwerte + zurück zu DRAW.
+-- ==========================================================
+-- ----------------------------------------------------------
+-- MAP_DRAW_LITE: zeichne einfache blaue Pac-Man-Map (2px dick)
+--  - Nutzt horizontale/vertikale Linienzüge
+--  - Am Ende: Farbe zurück auf Gelb und Startwerte setzen
+-- ----------------------------------------------------------
+MAP_DRAW_LITE:
+    -- blau setzen (R=0,G=0,B=200)
+    LI R6 0
+    OUT R6 IO_SCREEN_R
+    OUT R6 IO_SCREEN_G
+    LI R6 200
+    OUT R6 IO_SCREEN_B
+
+    -- ===== Außen: Top =====
+    LI R2 40
+    LI R3 40
+    LI R5 176
+H_TOP_1:
+        OUT R2 IO_SCREEN_X
+        OUT R3 IO_SCREEN_Y
+        OUT R6 IO_SCREEN_WRITE
+        ADDI R2 R2 1
+        SUBI R5 R5 1
+        JNZ PC H_TOP_1
+    LI R2 40
+    ADDI R3 R3 1
+    LI R5 176
+H_TOP_2:
+        OUT R2 IO_SCREEN_X
+        OUT R3 IO_SCREEN_Y
+        OUT R6 IO_SCREEN_WRITE
+        ADDI R2 R2 1
+        SUBI R5 R5 1
+        JNZ PC H_TOP_2
+
+    -- ===== Außen: Bottom =====
+    LI R2 40
+    LI R3 200
+    LI R5 176
+H_BOT_1:
+        OUT R2 IO_SCREEN_X
+        OUT R3 IO_SCREEN_Y
+        OUT R6 IO_SCREEN_WRITE
+        ADDI R2 R2 1
+        SUBI R5 R5 1
+        JNZ PC H_BOT_1
+    LI R2 40
+    ADDI R3 R3 1
+    LI R5 176
+H_BOT_2:
+        OUT R2 IO_SCREEN_X
+        OUT R3 IO_SCREEN_Y
+        OUT R6 IO_SCREEN_WRITE
+        ADDI R2 R2 1
+        SUBI R5 R5 1
+        JNZ PC H_BOT_2
+
+    -- ===== Außen: Left =====
+    LI R2 40
+    LI R3 40
+    LI R5 160
+V_LEFT_1:
+        OUT R2 IO_SCREEN_X
+        OUT R3 IO_SCREEN_Y
+        OUT R6 IO_SCREEN_WRITE
+        ADDI R3 R3 1
+        SUBI R5 R5 1
+        JNZ PC V_LEFT_1
+    LI R2 41
+    LI R3 40
+    LI R5 160
+V_LEFT_2:
+        OUT R2 IO_SCREEN_X
+        OUT R3 IO_SCREEN_Y
+        OUT R6 IO_SCREEN_WRITE
+        ADDI R3 R3 1
+        SUBI R5 R5 1
+        JNZ PC V_LEFT_2
+
+    -- ===== Außen: Right =====
+    LI R2 216
+    LI R3 40
+    LI R5 160
+V_RIGHT_1:
+        OUT R2 IO_SCREEN_X
+        OUT R3 IO_SCREEN_Y
+        OUT R6 IO_SCREEN_WRITE
+        ADDI R3 R3 1
+        SUBI R5 R5 1
+        JNZ PC V_RIGHT_1
+    LI R2 217
+    LI R3 40
+    LI R5 160
+V_RIGHT_2:
+        OUT R2 IO_SCREEN_X
+        OUT R3 IO_SCREEN_Y
+        OUT R6 IO_SCREEN_WRITE
+        ADDI R3 R3 1
+        SUBI R5 R5 1
+        JNZ PC V_RIGHT_2
+
+    -- ===== Innen: horizontale Balken =====
+    LI R2 60
+    LI R3 60
+    LI R5 136
+H_IN1_1:
+        OUT R2 IO_SCREEN_X
+        OUT R3 IO_SCREEN_Y
+        OUT R6 IO_SCREEN_WRITE
+        ADDI R2 R2 1
+        SUBI R5 R5 1
+        JNZ PC H_IN1_1
+    LI R2 60
+    ADDI R3 R3 1
+    LI R5 136
+H_IN1_2:
+        OUT R2 IO_SCREEN_X
+        OUT R3 IO_SCREEN_Y
+        OUT R6 IO_SCREEN_WRITE
+        ADDI R2 R2 1
+        SUBI R5 R5 1
+        JNZ PC H_IN1_2
+
+    LI R2 60
+    LI R3 180
+    LI R5 136
+H_IN2_1:
+        OUT R2 IO_SCREEN_X
+        OUT R3 IO_SCREEN_Y
+        OUT R6 IO_SCREEN_WRITE
+        ADDI R2 R2 1
+        SUBI R5 R5 1
+        JNZ PC H_IN2_1
+    LI R2 60
+    ADDI R3 R3 1
+    LI R5 136
+H_IN2_2:
+        OUT R2 IO_SCREEN_X
+        OUT R3 IO_SCREEN_Y
+        OUT R6 IO_SCREEN_WRITE
+        ADDI R2 R2 1
+        SUBI R5 R5 1
+        JNZ PC H_IN2_2
+
+    -- ===== Innen: mittlerer vertikaler Gang (oben) =====
+    LI R2 128
+    LI R3 60
+    LI R5 50
+V_MIDU_1:
+        OUT R2 IO_SCREEN_X
+        OUT R3 IO_SCREEN_Y
+        OUT R6 IO_SCREEN_WRITE
+        ADDI R3 R3 1
+        SUBI R5 R5 1
+        JNZ PC V_MIDU_1
+    LI R2 129
+    LI R3 60
+    LI R5 50
+V_MIDU_2:
+        OUT R2 IO_SCREEN_X
+        OUT R3 IO_SCREEN_Y
+        OUT R6 IO_SCREEN_WRITE
+        ADDI R3 R3 1
+        SUBI R5 R5 1
+        JNZ PC V_MIDU_2
+
+    -- ===== Innen: mittlerer vertikaler Gang (unten) =====
+    LI R2 128
+    LI R3 150
+    LI R5 30
+V_MIDD_1:
+        OUT R2 IO_SCREEN_X
+        OUT R3 IO_SCREEN_Y
+        OUT R6 IO_SCREEN_WRITE
+        ADDI R3 R3 1
+        SUBI R5 R5 1
+        JNZ PC V_MIDD_1
+    LI R2 129
+    LI R3 150
+    LI R5 30
+V_MIDD_2:
+        OUT R2 IO_SCREEN_X
+        OUT R3 IO_SCREEN_Y
+        OUT R6 IO_SCREEN_WRITE
+        ADDI R3 R3 1
+        SUBI R5 R5 1
+        JNZ PC V_MIDD_2
+
+    -- ===== Mitte: kurzer horizontaler Balken =====
+    LI R2 104
+    LI R3 120
+    LI R5 48
+H_MID_1:
+        OUT R2 IO_SCREEN_X
+        OUT R3 IO_SCREEN_Y
+        OUT R6 IO_SCREEN_WRITE
+        ADDI R2 R2 1
+        SUBI R5 R5 1
+        JNZ PC H_MID_1
+    LI R2 104
+    ADDI R3 R3 1
+    LI R5 48
+H_MID_2:
+        OUT R2 IO_SCREEN_X
+        OUT R3 IO_SCREEN_Y
+        OUT R6 IO_SCREEN_WRITE
+        ADDI R2 R2 1
+        SUBI R5 R5 1
+        JNZ PC H_MID_2
+
+    -- gelb wiederherstellen (R=255,G=255,B=0)
+    LI R6 255
+    OUT R6 IO_SCREEN_R
+    OUT R6 IO_SCREEN_G
+    LI R6 0
+    OUT R6 IO_SCREEN_B
+
+    -- Startposition und Sprite
+    LI R2 POS_CNTR
+    LI R3 0x90
+    LI R7 PAC_UP
+    MOV SP R7
+
+    JL DRAW         -- Map fertig → zeichne Sprite
+
+-- ----------------------------------------------------------
+-- WAIT_FOR_INPUT: Tastaturpolling (ASCII) und Dispatch
+--  - W:119, A:97, S:115, D:100
+--  - Nach jeder Taste → entsprechender MOVE_* Block
+--  - Weite Sprünge via JL zur Vermeidung Page-Problemen
+-- ----------------------------------------------------------
+WAIT_FOR_INPUT:
+    IN R7 2                 -- IO_KB_READ
+    OUT R7 4                -- IO_KB_CLEAR: Avail-Flag quittieren
+    SUBI R7 R7 0
+    JZ PC WAIT_FOR_INPUT
+
+    -- check for d
+    LI R6 100
+    SUB R5 R7 R6
+    JZ PC MOVE_RIGHT
+
+    -- check for w
+    LI R6 119
+    SUB R5 R7 R6
+    JZ PC MOVE_UP
+
+    -- check for a
+    LI R6 97
+    SUB R5 R7 R6
+    JZ PC MOVE_LEFT
+
+    -- check for s
+    LI R6 115
+    SUB R5 R7 R6
+    JZ PC MOVE_DOWN
+
+    JNZ PC WAIT_FOR_INPUT
+
+-- ----------------------------------------------------------
+-- MOVE_RIGHT:
+-- 1) Sprite an alter Position mit Schwarz 'löschen'
+-- 2) Richtung setzen (SP = PAC_RIGHT)
+-- 3) Kandidatenrechteck berechnen (xL',xR',yT',yB')
+-- 4) Innenkollisionen prüfen (VWL/VWR/VMU/VMD)
+-- 5) Außenrahmen clampen (X_HI)
+-- 6) neue Position committen und DRAW_BOTH
+-- ----------------------------------------------------------
+
+MOVE_RIGHT:
+    LI R6 COL_BLACK
+    LI R7 PAC_CLOSED
+ERASE_R:
+        OUT R6 IO_SCREEN_R
+        OUT R6 IO_SCREEN_G
+        OUT R6 IO_SCREEN_B
+
+        LI R4 8
+LOOP_Y_R:
+            INR R5 R7
+            LI R6 8
+LOOP_X_R:
+                SHRI R5 R5 1
+                JNC PC NO_PIXEL_R
+                OUT R2 IO_SCREEN_X
+                OUT R3 IO_SCREEN_Y
+                OUT R3 IO_SCREEN_WRITE
+NO_PIXEL_R:
+                SUBI R2 R2 1
+                SUBI R6 R6 1
+                JNZ PC LOOP_X_R
+
+            ADDI R7 R7 1
+            ADDI R3 R3 1
+            ADDI R2 R2 7
+            ADDI R2 R2 1
+            SUBI R4 R4 1
+        JNZ PC LOOP_Y_R
+        SUBI R3 R3 7
+        SUBI R3 R3 1
+
+    LI SP PAC_RIGHT         -- Richtung: rechts
+    --clamp right: R2 := min(R2+7, X_HI)
+    MOV R5 R2 
+    ADDI R5 R5 7
+    LI R4 X_HI
+    SUB R7 R5 R4
+    JC PC MR_OK
+    MOV R2 R4
+    JL DRAW_BOTH
+    MR_OK:
+    MOV R2 R5
+    JL DRAW_BOTH
+
+MOVE_UP:
+    LI R6 COL_BLACK
+    LI R7 PAC_CLOSED
+ERASE_U:
+        OUT R6 IO_SCREEN_R
+        OUT R6 IO_SCREEN_G
+        OUT R6 IO_SCREEN_B
+
+        LI R4 8
+LOOP_Y_U:
+            INR R5 R7
+            LI R6 8
+LOOP_X_U:
+                SHRI R5 R5 1
+                JNC PC NO_PIXEL_U
+                OUT R2 IO_SCREEN_X
+                OUT R3 IO_SCREEN_Y
+                OUT R3 IO_SCREEN_WRITE
+NO_PIXEL_U:
+                SUBI R2 R2 1
+                SUBI R6 R6 1
+                JNZ PC LOOP_X_U
+
+            ADDI R7 R7 1
+            ADDI R3 R3 1
+            ADDI R2 R2 7
+            ADDI R2 R2 1
+            SUBI R4 R4 1
+        JNZ PC LOOP_Y_U
+        SUBI R3 R3 7
+        SUBI R3 R3 1
+
+    LI SP PAC_UP
+    --clamp up: R3 := max(R3-7, Y_LO)
+    MOV R5 R3
+    SUBI R5 R5 7
+    LI R4 Y_LO
+    SUB R7 R5 R4
+    JC PC MU_CLAMP
+    MOV R3 R5
+    JL DRAW_BOTH
+    MU_CLAMP:
+    MOV R3 R4
+    JL DRAW_BOTH
+
+MOVE_LEFT:
+    LI R6 COL_BLACK
+    LI R7 PAC_CLOSED
+ERASE_L:
+        OUT R6 IO_SCREEN_R
+        OUT R6 IO_SCREEN_G
+        OUT R6 IO_SCREEN_B
+
+        LI R4 8
+LOOP_Y_L:
+            INR R5 R7
+            LI R6 8
+LOOP_X_L:
+                SHRI R5 R5 1
+                JNC PC NO_PIXEL_L
+                OUT R2 IO_SCREEN_X
+                OUT R3 IO_SCREEN_Y
+                OUT R3 IO_SCREEN_WRITE
+NO_PIXEL_L:
+                SUBI R2 R2 1
+                SUBI R6 R6 1
+                JNZ PC LOOP_X_L
+
+            ADDI R7 R7 1
+            ADDI R3 R3 1
+            ADDI R2 R2 7
+            ADDI R2 R2 1
+            SUBI R4 R4 1
+        JNZ PC LOOP_Y_L
+        SUBI R3 R3 7
+        SUBI R3 R3 1
+
+    LI SP PAC_LEFT
+    -- clamp left: R2 := max(R2-7, X_LO)
+    MOV R5 R2
+    SUBI R5 R5 7
+    LI R4 X_LO
+    SUB R7 R5 R4
+    JC PC ML_CLAMP
+    MOV R2 R5
+    JL DRAW_BOTH
+    ML_CLAMP:
+    MOV R2 R4
+    JL DRAW_BOTH
+
+MOVE_DOWN:
+    LI R6 COL_BLACK
+    LI R7 PAC_CLOSED
+ERASE_D:
+        OUT R6 IO_SCREEN_R
+        OUT R6 IO_SCREEN_G
+        OUT R6 IO_SCREEN_B
+
+        LI R4 8
+LOOP_Y_D:
+            INR R5 R7
+            LI R6 8
+LOOP_X_D:
+                SHRI R5 R5 1
+                JNC PC NO_PIXEL_D
+                OUT R2 IO_SCREEN_X
+                OUT R3 IO_SCREEN_Y
+                OUT R3 IO_SCREEN_WRITE
+NO_PIXEL_D:
+                SUBI R2 R2 1
+                SUBI R6 R6 1
+                JNZ PC LOOP_X_D
+
+            ADDI R7 R7 1
+            ADDI R3 R3 1
+            ADDI R2 R2 7
+            ADDI R2 R2 1
+            SUBI R4 R4 1
+        JNZ PC LOOP_Y_D
+        SUBI R3 R3 7
+        SUBI R3 R3 1
+
+    LI SP PAC_DOWN
+    --clamp down: R3 := min(R3+7, Y_HI)
+    MOV R5 R3
+    ADDI R5 R5 7
+    LI R4 Y_HI
+    SUB R7 R5 R4
+    JC PC MD_OK
+    MOV R3 R4
+    JL DRAW_BOTH
+    MD_OK:
+    MOV R3 R5
+    JL DRAW_BOTH
+
+JZ PC WAIT_FOR_INPUT
