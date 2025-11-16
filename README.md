@@ -1,56 +1,133 @@
 # Harvard16 Microprocessor
 
-This repository contains documentation, notes, and supporting material related to the design of a 16-bit Harvard-architecture microprocessor as developed and explored during the MPMP course (SoSe 2025) at HTWK Leipzig.  
-The processor architecture, instruction set concepts, and toolchain ideas presented here follow the principles and structures discussed during the course.
+This repository provides a structured overview, documentation, and supplemental material related to the **Harvard16 Microprocessor**, a 16-bit microprogrammed CPU developed and explored during the *Microprocessor and Microprogramming (MPMP), SoSe 2025* course at HTWK Leipzig.  
+The design follows the architectural principles, instruction set concepts, and development tools introduced throughout the course and is implemented in **Logisim-Evolution**.
 
 ---
 
 ## Overview
 
-The microprocessor designed in the course is a **Turing-complete**, **microprogrammed**, **16-bit Harvard-architecture CPU** implemented and simulated using **Logisim-Evolution**.  
-Key architectural elements include:
+The processor represents a compact yet fully functional educational CPU. It is:
 
+- **Microprogrammed**  
+- **Turing-complete**  
+- **16-bit**  
+- Based on a **Harvard architecture** (separate instruction and data memories)
+
+### Key architectural components
 - 16-bit instruction format  
-- **Harvard architecture** (separate instruction and data paths)  
 - **6 general-purpose registers**  
 - **Stack Pointer (SP)**  
 - **Program Counter (PC)**  
-- A microcode-driven control unit  
-- Dedicated assembler and supporting tools  
+- A modular ALU with dedicated shift units  
+- A microcode-driven Control Unit (CU)  
+- Separate Program Storage ROM and Sprite ROM  
+- A toolchain (WagTools) supporting assembly, testing, and documentation
 
-The goal of the architecture is to illustrate how a fully functional CPU can be constructed from fundamental digital logic principles while remaining compact enough for educational and experimental purposes.
+The goal of the architecture is to demonstrate how a complete CPU can be constructed from fundamental digital logic while remaining accessible for laboratory work, experimentation, and educational demonstrations.
 
 ---
 
-## How to Run the Program in Logisim-Evolution
+## Circuit Architecture (.circ File Structure)
 
-Follow the steps below to load the microprocessor project and run the Pac-Man demo inside Logisim-Evolution.
+The Logisim-Evolution project (`MpMp25.circ`) is composed of several interconnected subcircuits:
 
-1. **Download and install Logisim-Evolution**  
-   Obtain the latest release from the official repository:  
+### **Top-Level Integration**
+- **MAIN**  
+  The central integration circuit connecting all modules, including memory components, the microcoded control path, ALU, register file, and I/O elements.
+
+### **Core Components**
+- **CU (Control Unit)**  
+  A microprogrammed controller that interprets instruction fields and drives execution sequencing.
+
+- **RF (Register File)**  
+  Contains:
+  - 6 general-purpose registers  
+  - Stack Pointer (SP)  
+  - Program Counter (PC)
+
+- **ALU (Arithmetic Logic Unit)**  
+  Supports arithmetic, logic operations, and status flag generation.
+
+- **SHL / SHR**  
+  Dedicated shift-left and shift-right units integrated into the ALU datapath.
+
+### **External Components**
+- **Program Storage ROM** – Stores machine code (`.hex` format)  
+- **Sprite ROM** – Stores graphical tile and sprite data for demos (e.g., Pac-Man)  
+- **Keyboard input** – Via Logisim’s virtual keyboard  
+- **Clock / simulation settings** – Customizable tick frequency
+
+### **Libraries Used**
+The project depends on several built-in Logisim-Evolution libraries:
+- Wiring  
+- Gates  
+- Plexers  
+- Arithmetic  
+- Memory  
+- I/O  
+- TTL, Base libraries  
+
+These must remain enabled for the project to load correctly.
+
+---
+
+## How to Run the Project in Logisim-Evolution
+
+Follow the instructions below to load and execute the microprocessor along with the Pac-Man demo.
+
+1. **Install Logisim-Evolution**  
+   Download from the official GitHub releases:  
    https://github.com/logisim-evolution/logisim-evolution
 
 2. **Load the program into the Program Storage ROM**  
-   Open the CPU project in Logisim-Evolution and navigate to the instruction memory  
-   (Program Storage).  
-   Use the context menu → **Load Image** to load the provided `.hex` program file.
+   - Open the `MpMp25.circ` file.  
+   - Navigate to the Program Storage ROM.  
+   - Right-click → **Load Image** → Select the provided `.hex` program file.
 
-3. **Load the sprite sheet into the Sprite ROM**  
-   Locate the Sprite ROM component and load the corresponding sprite `.hex` file  
-   using the same **Load Image** method.
+3. **Load the sprite data into the Sprite ROM**  
+   - Locate the Sprite ROM.  
+   - Right-click → **Load Image** → Select the sprite `.hex` file.
 
-4. **Set the simulation clock frequency**  
-   Go to **Simulation → Tick Frequency** and select (or manually set):  
-   **2048 kHz**  
-   *(On a MacBook Pro 2020 M1, the effective measured frequency is approximately 5 kHz.)*
+4. **Configure the simulation clock frequency**  
+   - Go to **Simulation → Tick Frequency**  
+   - Set the frequency to **2048 kHz**  
+   - *(Note: On a MacBook Pro 2020 M1, effective measured tick rate ≈ 5 kHz.)*
 
-5. **Enable continuous stepping**  
-   Activate “Stepping” or “Auto-Tick” mode so the CPU executes instructions continuously.
+5. **Enable continuous execution**  
+   - Activate **Auto-Tick** or continuous stepping so the CPU runs instructions automatically.
 
-6. **Open the integrated keyboard**  
-   Click on the in-application virtual keyboard to enable input for the demo.
+6. **Enable keyboard input**  
+   - Open Logisim’s **virtual keyboard**.  
+   - Ensure the window is focused to allow key events.
 
-7. **Play the Pac-Man demo**  
-   Control movement using **W A S D** keys.
+7. **Run the Pac-Man demo**  
+   - Movement: **W A S D**  
+   - The demo runs natively inside Logisim using CPU-driven sprite rendering.
 
-Enjoy exploring the microprocessor architecture while playing Pac-Man inside Logisim-Evolution!
+---
+
+## Additional Notes
+
+### ROM Handling
+- Logisim-Evolution does **not embed** ROM contents in the `.circ` file by default.  
+- The `.hex` files for program and sprites must be **reloaded** after reopening unless stored with “Include File Contents”.
+
+### Performance Considerations
+- High-frequency simulation may be limited by JVM and hardware performance.  
+- Sprite rendering and CPU execution speed scale with simulation tick rate.
+
+### Known Limitations
+- Visual rendering speed varies between platforms.
+- On Apple Silicon (e.g., M1 MacBook Pro), the observed practical clock frequency is around **5 kHz**
+
+---
+
+## Acknowledgements
+
+This repository is based on concepts, designs, and development work originating from the  
+**MPMP – Microprocessor and Microprogramming C004 (SoSe 2025)** course at **HTWK Leipzig**,  
+taught by **Prof. Wagner**.
+
+Special thanks to **all participating students**, whose collaborative effort, discussions, and tool development (particularly [**WagTools**](https://gitlab.dit.htwk-leipzig.de/mpmp-2025/microprocessor/-/tree/ludger_halpick/87440_ludger_halpick/wagtools), which made compiling the assembly code to .hex possible) enabled the creation of the microprocessor and its associated ecosystem.
+
