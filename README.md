@@ -1,93 +1,133 @@
-# Microprocessor
+# Harvard16 Microprocessor
 
+This repository provides a structured overview, documentation, and supplemental material related to the **Harvard16 Microprocessor**, a 16-bit microprogrammed CPU developed and explored during the *Microprocessor and Microprogramming (MPMP), SoSe 2025* course at HTWK Leipzig.  
+The design follows the architectural principles, instruction set concepts, and development tools introduced throughout the course and is implemented in **Logisim-Evolution**.
 
+---
 
-## Getting started
+## Overview
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+The processor represents a compact yet fully functional educational CPU. It is:
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+- **Microprogrammed**  
+- **Turing-complete**  
+- **16-bit**  
+- Based on a **Harvard architecture** (separate instruction and data memories)
 
-## Add your files
+### Key architectural components
+- 16-bit instruction format  
+- **6 general-purpose registers**  
+- **Stack Pointer (SP)**  
+- **Program Counter (PC)**  
+- A modular ALU with dedicated shift units  
+- A microcode-driven Control Unit (CU)  
+- Separate Program Storage ROM and Sprite ROM  
+- A toolchain (WagTools) supporting assembly, testing, and documentation
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+The goal of the architecture is to demonstrate how a complete CPU can be constructed from fundamental digital logic while remaining accessible for laboratory work, experimentation, and educational demonstrations.
 
-```
-cd existing_repo
-git remote add origin https://gitlab.dit.htwk-leipzig.de/mpmp-2025/microprocessor.git
-git branch -M main
-git push -uf origin main
-```
+---
 
-## Integrate with your tools
+## Circuit Architecture (.circ File Structure)
 
-- [ ] [Set up project integrations](https://gitlab.dit.htwk-leipzig.de/mpmp-2025/microprocessor/-/settings/integrations)
+The Logisim-Evolution project (`MpMp25.circ`) is composed of several interconnected subcircuits:
 
-## Collaborate with your team
+### **Top-Level Integration**
+- **MAIN**  
+  The central integration circuit connecting all modules, including memory components, the microcoded control path, ALU, register file, and I/O elements.
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+### **Core Components**
+- **CU (Control Unit)**  
+  A microprogrammed controller that interprets instruction fields and drives execution sequencing.
 
-## Test and Deploy
+- **RF (Register File)**  
+  Contains:
+  - 6 general-purpose registers  
+  - Stack Pointer (SP)  
+  - Program Counter (PC)
 
-Use the built-in continuous integration in GitLab.
+- **ALU (Arithmetic Logic Unit)**  
+  Supports arithmetic, logic operations, and status flag generation.
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+- **SHL / SHR**  
+  Dedicated shift-left and shift-right units integrated into the ALU datapath.
 
-***
+### **External Components**
+- **Program Storage ROM** – Stores machine code (`.hex` format)  
+- **Sprite ROM** – Stores graphical tile and sprite data for demos (e.g., Pac-Man)  
+- **Keyboard input** – Via Logisim’s virtual keyboard  
+- **Clock / simulation settings** – Customizable tick frequency
 
-# Editing this README
+### **Libraries Used**
+The project depends on several built-in Logisim-Evolution libraries:
+- Wiring  
+- Gates  
+- Plexers  
+- Arithmetic  
+- Memory  
+- I/O  
+- TTL, Base libraries  
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+These must remain enabled for the project to load correctly.
 
-## Suggestions for a good README
+---
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+## How to Run the Project in Logisim-Evolution
 
-## Name
-Choose a self-explaining name for your project.
+Follow the instructions below to load and execute the microprocessor along with the Pac-Man demo.
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+1. **Install Logisim-Evolution**  
+   Download from the official GitHub releases:  
+   https://github.com/logisim-evolution/logisim-evolution
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+2. **Load the program into the Program Storage ROM**  
+   - Open the `MpMp25.circ` file.  
+   - Navigate to the Program Storage ROM.  
+   - Right-click → **Load Image** → Select the provided `.hex` program file.
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+3. **Load the sprite data into the Sprite ROM**  
+   - Locate the Sprite ROM.  
+   - Right-click → **Load Image** → Select the sprite `.hex` file.
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+4. **Configure the simulation clock frequency**  
+   - Go to **Simulation → Tick Frequency**  
+   - Set the frequency to **2048 kHz**  
+   - *(Note: On a MacBook Pro 2020 M1, effective measured tick rate ≈ 5 kHz.)*
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+5. **Enable continuous execution**  
+   - Activate **Auto-Tick** or continuous stepping so the CPU runs instructions automatically.
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+6. **Enable keyboard input**  
+   - Open Logisim’s **virtual keyboard**.  
+   - Ensure the window is focused to allow key events.
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+7. **Run the Pac-Man demo**  
+   - Movement: **W A S D**  
+   - The demo runs natively inside Logisim using CPU-driven sprite rendering.
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+---
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+## Additional Notes
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+### ROM Handling
+- Logisim-Evolution does **not embed** ROM contents in the `.circ` file by default.  
+- The `.hex` files for program and sprites must be **reloaded** after reopening unless stored with “Include File Contents”.
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+### Performance Considerations
+- High-frequency simulation may be limited by JVM and hardware performance.  
+- Sprite rendering and CPU execution speed scale with simulation tick rate.
 
-## License
-For open source projects, say how it is licensed.
+### Known Limitations
+- Visual rendering speed varies between platforms.
+- On Apple Silicon (e.g., M1 MacBook Pro), the observed practical clock frequency is around **5 kHz**
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+---
+
+## Acknowledgements
+
+This repository is based on concepts, designs, and development work originating from the  
+**MPMP – Microprocessor and Microprogramming C004 (SoSe 2025)** course at **HTWK Leipzig**,  
+taught by **Prof. Wagner**.
+
+Special thanks to **all participating students**, whose collaborative effort, discussions, and tool development (particularly [**WagTools**](https://gitlab.dit.htwk-leipzig.de/mpmp-2025/microprocessor/-/tree/ludger_halpick/87440_ludger_halpick/wagtools), which made compiling the assembly code to .hex possible) enabled the creation of the microprocessor and its associated ecosystem.
+
