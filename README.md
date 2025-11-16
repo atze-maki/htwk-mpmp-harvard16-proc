@@ -5,6 +5,23 @@ The design follows the architectural principles, instruction set concepts, and d
 
 ---
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Circuit Architecture (.circ File Structure)](#circuit-architecture-circ-file-structure)
+  - [Top-Level Integration](#top-level-integration)
+  - [Core Components](#core-components)
+  - [External Components](#external-components)
+  - [Libraries Used](#libraries-used)
+- [How to Run the Project in Logisim-Evolution](#how-to-run-the-project-in-logisim-evolution)
+- [Additional Notes](#additional-notes)
+  - [ROM Handling](#rom-handling)
+  - [Performance Considerations](#performance-considerations)
+  - [Known Limitations](#known-limitations)
+- [Acknowledgements](#acknowledgements)
+
+---
+
 ## Overview
 
 The processor represents a compact yet fully functional educational CPU. It is:
