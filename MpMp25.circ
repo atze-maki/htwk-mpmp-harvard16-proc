@@ -693,6 +693,7 @@
 0 3c 7e 66 42 42 0 0
 0 3c 4*7e 3c
 </a>
+      <a name="label" val="Sprite_memory"/>
       <a name="labelvisible" val="true"/>
     </comp>
     <comp lib="4" loc="(2600,980)" name="ROM">
@@ -753,7 +754,8 @@ d538 fe08 55e9 c887 da0d db0e db0b 12d1
 320 8824 328 8824 9803
 </a>
       <a name="dataWidth" val="16"/>
-      <a name="labelfont" val="SansSerif bold 10"/>
+      <a name="label" val="Program_memory"/>
+      <a name="labelvisible" val="true"/>
     </comp>
     <comp lib="4" loc="(590,120)" name="Register">
       <a name="appearance" val="classic"/>
